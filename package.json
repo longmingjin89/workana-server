@@ -1,0 +1,25 @@
+{
+  "name": "workana-server",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "once": "tsx src/index.ts --once",
+    "info-bot": "tsx src/tools/bot-info.ts",
+    "workana": "tsx src/tools/workana-browse.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.0",
+    "i18n-iso-countries": "^7.14.0",
+    "playwright": "^1.52.0",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "telegram": "^2.26.0",
+    "winston": "^3.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.15.0",
+    "typescript": "^5.5.0"
+  }
+}

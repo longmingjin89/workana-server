@@ -1,0 +1,15 @@
+{
+  "search": {
+    "baseUrl": "https://www.workana.com"
+  },
+  "behavior": {
+    "pageLoadWait": [2000, 5000],
+    "scrollStep": [300, 500],
+    "scrollDelay": [1000, 3000],
+    "typingDelay": [50, 150],
+    "pageNavigationDelay": [5000, 15000],
+    "mouseMoveProbability": 0.7,
+    "randomScrollBackProbability": 0.15,
+    "randomHoverProbability": 0.1
+  }
+}
