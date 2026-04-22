@@ -7,7 +7,7 @@ export const SELECTORS = {
 
   // Dashboard
   dashboard: {
-    findProjectsLink: 'a[href*="ref=menu_projects_index"]',
+    findProjectsLink: '.main-navigation-dropdown a[href="https://www.workana.com/jobs"]',
     findProjectsButton: 'a.btn.btn-inverse:has-text("Find projects")',
   },
 

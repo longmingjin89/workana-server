@@ -23,14 +23,7 @@ async function waitForJobsResponse(page: Page, timeoutMs = 15000): Promise<boole
 export async function navigateToJobsPage(page: Page): Promise<void> {
   logger.info('Clicking "Find projects"...');
 
-  const dashboardBtn = page.locator(SELECTORS.dashboard.findProjectsButton);
-  const navLink = page.locator(SELECTORS.dashboard.findProjectsLink).first();
-
-  if (await dashboardBtn.isVisible().catch(() => false)) {
-    await humanClick(page, SELECTORS.dashboard.findProjectsButton);
-  } else {
-    await humanClick(page, SELECTORS.dashboard.findProjectsLink);
-  }
+  await page.goto('https://www.workana.com/jobs', { waitUntil: 'domcontentloaded' });
 
   await page.waitForLoadState('domcontentloaded');
   try {
