@@ -57,7 +57,6 @@ export const appConfig: AppConfig = {
   },
   paths: {
     logPath: env('LOG_PATH', './logs'),
-    cachePath: env('CACHE_PATH', './data/cache.json'),
   },
   posting: {
     fetchDetail: envBool('FETCH_DETAIL', true),
@@ -65,6 +64,5 @@ export const appConfig: AppConfig = {
     maxBudget: envInt('MAX_BUDGET', 0),
     minHourlyRate: envInt('MIN_HOURLY_RATE', 0),
     maxPagesPerCycle: Math.max(1, envInt('MAX_PAGES_PER_CYCLE', 10)),
-    cacheTtlHours: envInt('CACHE_TTL_HOURS', 48),
   },
 };

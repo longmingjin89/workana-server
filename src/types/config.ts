@@ -31,7 +31,6 @@ export interface AppConfig {
   };
   paths: {
     logPath: string;
-    cachePath: string;
   };
   posting: {
     fetchDetail: boolean;
@@ -39,6 +38,5 @@ export interface AppConfig {
     maxBudget: number;
     minHourlyRate: number;
     maxPagesPerCycle: number;
-    cacheTtlHours: number;
   };
 }

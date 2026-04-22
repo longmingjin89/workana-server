@@ -3,7 +3,6 @@ import { logger } from '../core/logger.js';
 import { appConfig } from '../core/config.js';
 import { SELECTORS } from './selectors.js';
 import { humanClick, randomDelay } from '../browser/human.js';
-import { cache } from '../storage/cache.js';
 import type { ProjectSummary } from '../types/project.js';
 
 // Wait for AJAX response with timeout
@@ -191,10 +190,8 @@ export async function collectProjects(page: Page, scanAll = false): Promise<Proj
       if (seenInCycle.has(project.url)) continue;
       seenInCycle.add(project.url);
 
-      if (!cache.hasSeen(project.url)) {
-        all.push(project);
-        newOnThisPage++;
-      }
+      all.push(project);
+      newOnThisPage++;
     }
 
     logger.info(`Page ${pageNum}: ${newOnThisPage} new projects`);
