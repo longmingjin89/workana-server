@@ -6,11 +6,15 @@
     "start": "tsx src/index.ts",
     "once": "tsx src/index.ts --once",
     "info-bot": "tsx src/tools/bot-info.ts",
-    "workana": "tsx src/tools/workana-browse.ts"
+    "workana": "tsx src/tools/workana-browse.ts",
+    "test-profile": "tsx src/tools/test-client-profile.ts",
+    "test-db": "tsx src/tools/test-db.ts"
   },
   "dependencies": {
+    "@types/pg": "^8.20.0",
     "dotenv": "^16.4.0",
     "i18n-iso-countries": "^7.14.0",
+    "pg": "^8.20.0",
     "playwright": "^1.52.0",
     "playwright-extra": "^4.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",

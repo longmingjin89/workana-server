@@ -6,7 +6,9 @@ import { openNewTab } from '../browser/engine.js';
 import { randomDelay } from '../browser/human.js';
 import { appConfig } from '../core/config.js';
 import { SELECTORS } from './selectors.js';
-import type { ProjectSummary, ProjectDetail, ClientReview } from '../types/project.js';
+import { fetchClientProfile } from './client.js';
+import { upsertClient } from '../storage/repository.js';
+import type { ProjectSummary, ProjectDetail } from '../types/project.js';
 
 countries.registerLocale(enLocale);
 
@@ -22,64 +24,6 @@ function starsWidthToRating(style: string): number {
   return Math.round((parseFloat(match[1]) / 20) * 10) / 10;
 }
 
-async function extractClientReviews(page: Page): Promise<ClientReview[]> {
-  const reviews: ClientReview[] = [];
-
-  const reviewSection = page.locator(SELECTORS.detail.reviewSection);
-  if (!(await reviewSection.isVisible().catch(() => false))) {
-    return reviews;
-  }
-
-  const reviewItems = page.locator(SELECTORS.detail.reviewList);
-  const count = await reviewItems.count();
-
-  for (let i = 0; i < count; i++) {
-    try {
-      const item = reviewItems.nth(i);
-
-      const projectTitle = await item.locator(SELECTORS.detail.reviewProjectTitle)
-        .first().textContent().catch(() => '') || '';
-
-      const freelancerName = await item.locator(SELECTORS.detail.reviewFreelancerName)
-        .first().textContent().catch(() => '') || '';
-
-      const freelancerLink = await item.locator(SELECTORS.detail.reviewFreelancerLink)
-        .first().getAttribute('href').catch(() => '') || '';
-
-      const ratingStyle = await item.locator(SELECTORS.detail.reviewRating)
-        .first().getAttribute('style').catch(() => '') || '';
-      const rating = starsWidthToRating(ratingStyle);
-
-      const timeAgo = await item.locator(SELECTORS.detail.reviewTime)
-        .first().textContent().catch(() => '') || '';
-
-      // Review text: p tag after wk-user-info (if present)
-      const allPs = item.locator('> p');
-      const pCount = await allPs.count();
-      let comment: string | null = null;
-      if (pCount > 1) {
-        const lastP = await allPs.nth(pCount - 1).textContent().catch(() => null);
-        if (lastP && lastP.trim() !== '.' && lastP.trim().length > 1) {
-          comment = lastP.trim();
-        }
-      }
-
-      reviews.push({
-        projectTitle: projectTitle.trim(),
-        freelancerName: freelancerName.trim(),
-        freelancerProfileUrl: freelancerLink.trim(),
-        rating,
-        timeAgo: timeAgo.trim(),
-        comment,
-      });
-    } catch (err) {
-      logger.warn(`Failed to parse review ${i}: ${err}`);
-    }
-  }
-
-  return reviews;
-}
-
 export async function fetchProjectDetail(summary: ProjectSummary): Promise<ProjectDetail> {
   const fullUrl = appConfig.search.baseUrl + summary.url;
   logger.info(`Fetching detail: ${summary.title.substring(0, 50)}...`);
@@ -89,19 +33,15 @@ export async function fetchProjectDetail(summary: ProjectSummary): Promise<Proje
   try {
     await randomDelay(1000, 2000);
 
-    // Title
     const title = await page.locator(SELECTORS.detail.title)
       .first().textContent().catch(() => summary.title) || summary.title;
 
-    // Status
     const status = await page.locator(SELECTORS.detail.status)
       .first().textContent().catch(() => 'open') || 'open';
 
-    // Budget
     const budget = await page.locator(SELECTORS.detail.budget)
       .first().textContent().catch(() => summary.budget) || summary.budget;
 
-    // Description
     let fullDescription = await page.locator(SELECTORS.detail.description)
       .first().textContent().catch(() => '') || '';
     if (!fullDescription) {
@@ -109,13 +49,11 @@ export async function fetchProjectDetail(summary: ProjectSummary): Promise<Proje
         .first().textContent().catch(() => summary.descriptionPreview) || summary.descriptionPreview;
     }
 
-    // Category / subcategory
     const specBolds = page.locator('.specification b');
     const specCount = await specBolds.count();
     const category = specCount > 0 ? (await specBolds.nth(0).textContent() || '') : '';
     const subcategory = specCount > 1 ? (await specBolds.nth(1).textContent() || '') : '';
 
-    // Skills
     const skillEls = page.locator(SELECTORS.detail.skills);
     const skillCount = await skillEls.count();
     const skills: string[] = [];
@@ -124,7 +62,6 @@ export async function fetchProjectDetail(summary: ProjectSummary): Promise<Proje
       if (t) skills.push(t.trim());
     }
 
-    // Client info
     const clientName = await page.locator(SELECTORS.detail.clientName)
       .first().textContent().catch(() => summary.clientName) || summary.clientName;
 
@@ -140,7 +77,6 @@ export async function fetchProjectDetail(summary: ProjectSummary): Promise<Proje
       .first().getAttribute('style').catch(() => '') || '';
     const clientRating = starsWidthToRating(clientRatingStyle);
 
-    // Published/paid count, member since
     const dataItems = page.locator('.item-data');
     const dataCount = await dataItems.count();
     let clientProjectsPublished = 0;
@@ -164,10 +100,16 @@ export async function fetchProjectDetail(summary: ProjectSummary): Promise<Proje
       }
     }
 
-    // Reviews
-    const clientReviews = await extractClientReviews(page);
-    if (clientReviews.length > 0) {
-      logger.info(`  Found ${clientReviews.length} client reviews`);
+    // Fetch and save client profile (non-blocking on failure)
+    if (clientProfileUrl) {
+      try {
+        const clientData = await fetchClientProfile(clientProfileUrl);
+        if (clientData) {
+          await upsertClient(clientData);
+        }
+      } catch (err) {
+        logger.warn(`Client profile fetch failed for ${clientProfileUrl}: ${err}`);
+      }
     }
 
     return {
@@ -186,7 +128,7 @@ export async function fetchProjectDetail(summary: ProjectSummary): Promise<Proje
       clientProjectsPublished,
       clientProjectsPaid,
       clientMemberSince,
-      clientReviews,
+      clientReviews: [],
       interestedCount,
     };
   } finally {

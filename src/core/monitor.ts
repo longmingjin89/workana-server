@@ -6,18 +6,19 @@ import { navigateToJobsPage, applyFilters, collectProjects, refreshListingPage }
 import { fetchProjectDetail } from '../scraper/detail.js';
 import { formatProjectMessage } from '../notifier/formatter.js';
 import { postToChannel, initTelegram, startReplyListener } from '../notifier/telegram.js';
-import { cache } from '../storage/cache.js';
+import { initDb } from '../storage/db.js';
+import { projectExists, isClientScam, saveProject, getSeenSlugs } from '../storage/repository.js';
 import { waitForNextCycle } from './scheduler.js';
 import { randomDelay } from '../browser/human.js';
 import type { Page } from 'playwright';
 
 let isFirstCycle = true;
+let seenSlugs: Set<string> = new Set();
 
 function isHourly(budget: string): boolean {
   return /\/\s*hour/i.test(budget);
 }
 
-// Extract upper number from "USD 500 - 1,000", "€ 400 - 900", "Over USD 3,000"
 function extractUpperNumber(budget: string): number {
   if (!budget) return 0;
   const numbers = budget.replace(/,/g, '').match(/[\d.]+/g);
@@ -25,7 +26,6 @@ function extractUpperNumber(budget: string): number {
   return parseFloat(numbers[numbers.length - 1]);
 }
 
-// Parse "27 minutes ago", "1 hour ago", "Yesterday" etc. to minutes
 function parsePublishedMinutes(text: string): number {
   const t = text.toLowerCase().trim();
   if (t.includes('just now')) return 0;
@@ -57,7 +57,7 @@ function passesBudgetFilter(budget: string): boolean {
   if (maxBudget <= 0) return true;
 
   const upper = extractUpperNumber(budget);
-  if (upper === 0) return true; // Can't parse = include
+  if (upper === 0) return true;
 
   return upper >= maxBudget;
 }
@@ -84,7 +84,6 @@ async function runCycle(page: Page): Promise<void> {
   logger.info('=== Cycle started ===');
 
   if (isFirstCycle) {
-    // First run: login, navigate, apply filters, cache all projects
     await ensureLoggedIn(page);
     await navigateToJobsPage(page);
     const filtersOk = await applyFilters(page);
@@ -94,51 +93,70 @@ async function runCycle(page: Page): Promise<void> {
     }
 
     const projects = await collectProjects(page, true);
-    cache.markSeenBatch(projects.map(p => p.url));
-    cache.save();
-    logger.info(`First run: cached ${projects.length} new project URLs (${cache.size} total)`);
+    // Mark all current projects as seen (in-memory + DB check)
+    for (const p of projects) {
+      seenSlugs.add(p.slug);
+    }
+    logger.info(`First run: seeded ${seenSlugs.size} slugs (${projects.length} from page + ${seenSlugs.size - projects.length} from DB)`);
     isFirstCycle = false;
     return;
   }
 
-  // Subsequent runs: refresh and find new projects
   const refreshOk = await refreshListingPage(page);
   if (!refreshOk) {
     logger.warn('Refresh filters failed - restarting browser');
     throw new Error('FILTER_FAILED');
   }
 
-  const newProjects = await collectProjects(page);
+  const allProjects = await collectProjects(page);
 
-  // Cache new URLs immediately
-  for (const p of newProjects) {
-    cache.markSeen(p.url);
+  // Deduplicate against in-memory set (fast) + DB (authoritative)
+  const newProjects = [];
+  for (const p of allProjects) {
+    if (seenSlugs.has(p.slug)) continue;
+    const inDb = await projectExists(p.slug);
+    if (inDb) {
+      seenSlugs.add(p.slug);
+      continue;
+    }
+    newProjects.push(p);
   }
-  cache.save();
 
   if (newProjects.length === 0) {
     logger.info('No new projects found');
     return;
   }
 
-  // Filter: recent projects only + budget threshold
   const filtered = newProjects.filter(p => isRecentProject(p.publishedAt) && passesBudgetFilter(p.budget));
 
   if (filtered.length === 0) {
     logger.info(`${newProjects.length} new projects found, none passed filters`);
+    // Still mark as seen
+    for (const p of newProjects) seenSlugs.add(p.slug);
     return;
   }
 
   logger.info(`${filtered.length} projects to post (${newProjects.length - filtered.length} filtered)`);
-
-  // Post oldest first, newest last
   filtered.reverse();
 
   for (const summary of filtered) {
     try {
       const detail = await fetchProjectDetail(summary);
-      const message = formatProjectMessage(detail);
 
+      // Skip scam clients
+      if (detail.clientProfileUrl) {
+        const scam = await isClientScam(detail.clientProfileUrl);
+        if (scam) {
+          logger.info(`Skipping scam client: ${detail.clientProfileUrl}`);
+          seenSlugs.add(detail.slug);
+          continue;
+        }
+      }
+
+      await saveProject(detail);
+      seenSlugs.add(detail.slug);
+
+      const message = formatProjectMessage(detail);
       await postToChannel(message);
 
       logger.info(`Posted: ${summary.title.substring(0, 50)}...`);
@@ -148,18 +166,23 @@ async function runCycle(page: Page): Promise<void> {
     }
   }
 
+  // Mark remaining new (filtered-out) projects as seen
+  for (const p of newProjects) seenSlugs.add(p.slug);
+
   logger.info(`=== Cycle completed: ${filtered.length} posted ===`);
 }
 
 export async function startMonitor(once: boolean): Promise<void> {
-  cache.clear();
-  logger.info('Cache cleared on startup');
+  await initDb();
+
+  // Load existing slugs from DB into memory
+  seenSlugs = await getSeenSlugs();
+  logger.info(`Loaded ${seenSlugs.size} seen slugs from DB`);
 
   await initTelegram();
   await startReplyListener();
 
-  const forceVisible = false;
-  let { page } = await launchBrowser(forceVisible);
+  let { page } = await launchBrowser(false);
 
   try {
     await runCycle(page);
@@ -177,7 +200,6 @@ export async function startMonitor(once: boolean): Promise<void> {
   while (true) {
     await waitForNextCycle();
 
-    // Check if page/browser is still alive before running cycle
     let pageAlive = false;
     try {
       await page.evaluate(() => document.readyState);

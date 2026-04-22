@@ -44,6 +44,30 @@ export const SELECTORS = {
     pageOne: 'ul.pagination li a:has-text("1")',
   },
 
+  // Client profile page
+  clientProfile: {
+    name: '.profile-component.profile-employer .h1 span',
+    ratingFill: '.profile-component.profile-employer .stars-fill',
+    flag: '.profile-component.profile-employer .flag',
+    paymentVerified: '.profile-component.profile-employer .payment i.wk2-icon-verifyed',
+    projectsPublished: '.profile-component.profile-employer .rating p:first-child strong',
+    projectsPaid: '.profile-component.profile-employer .rating p:last-child strong',
+    lastLogin: '.profile-component.profile-employer .activity p:first-child strong',
+    memberSince: '.profile-component.profile-employer .activity p:last-child strong',
+    // Open jobs
+    openJobItem: '#section-open-projects .project-item',
+    jobTitle: '.project-title a',
+    jobDate: '.date',
+    jobBudget: '.budget .values span',
+    // Freelancer reviews
+    reviewItem: '#ratings-table .js-rating-item',
+    reviewJobTitle: 'h4.title a',
+    reviewFreelancerName: '.client-name a',
+    reviewRatingFill: '.stars-fill',
+    reviewDate: '.small.date',
+    reviewComment: '.rating-cite',
+  },
+
   // Detail page
   detail: {
     title: 'header#productName h1.title',

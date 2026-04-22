@@ -36,6 +36,38 @@ export interface ProjectDetail extends ProjectSummary {
   clientReviews: ClientReview[];
 }
 
+export interface ClientJob {
+  slug: string;
+  title: string;
+  url: string;
+  budget: string;
+  publishedAt: string;
+}
+
+export interface FreelancerReview {
+  jobTitle: string;
+  jobUrl: string;
+  freelancerName: string;
+  freelancerUrl: string;
+  rating: number;
+  comment: string;
+  timeAgo: string;
+}
+
+export interface ClientProfile {
+  profileUrl: string;
+  name: string;
+  countryCode: string;
+  paymentVerified: boolean;
+  rating: number;
+  projectsPublished: number;
+  projectsPaid: number;
+  memberSince: string;
+  lastLogin: string;
+  openJobs: ClientJob[];
+  reviews: FreelancerReview[];
+}
+
 export interface Reply {
   telegramMsgId: number;
   projectUrl: string;
