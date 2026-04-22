@@ -138,34 +138,25 @@ async function runCycle(page: Page): Promise<void> {
     return;
   }
 
-  const filtered = newProjects.filter(p => isRecentProject(p.publishedAt) && passesBudgetFilter(p.budget));
+  const recent = newProjects.filter(p => isRecentProject(p.publishedAt));
+  logger.info(`${recent.length} recent projects to process (${newProjects.length - recent.length} too old)`);
+  recent.reverse();
 
-  if (filtered.length === 0) {
-    logger.info(`${newProjects.length} new projects found, none passed filters`);
-    // Still mark as seen
-    for (const p of newProjects) seenSlugs.add(p.slug);
-    return;
-  }
-
-  logger.info(`${filtered.length} projects to post (${newProjects.length - filtered.length} filtered)`);
-  filtered.reverse();
-
-  for (const summary of filtered) {
+  for (const summary of recent) {
     try {
       const detail = await fetchProjectDetail(summary);
 
-      // Skip scam clients
-      if (detail.clientProfileUrl) {
-        const scam = await isClientScam(detail.clientProfileUrl);
-        if (scam) {
-          logger.info(`Skipping scam client: ${detail.clientProfileUrl}`);
-          seenSlugs.add(detail.slug);
-          continue;
-        }
-      }
-
       await saveProject(detail);
       seenSlugs.add(detail.slug);
+
+      const scam = detail.clientProfileUrl ? await isClientScam(detail.clientProfileUrl) : false;
+      const shouldPost = !scam && !isHourly(detail.budget) && passesBudgetFilter(detail.budget);
+
+      if (!shouldPost) {
+        if (scam) logger.info(`Saved but not posted (scam client): ${detail.clientProfileUrl}`);
+        else logger.info(`Saved but not posted (budget filtered): ${detail.budget}`);
+        continue;
+      }
 
       const message = formatProjectMessage(detail);
       await postToChannel(message);
@@ -177,10 +168,10 @@ async function runCycle(page: Page): Promise<void> {
     }
   }
 
-  // Mark remaining new (filtered-out) projects as seen
+  // Mark too-old projects as seen
   for (const p of newProjects) seenSlugs.add(p.slug);
 
-  logger.info(`=== Cycle completed: ${filtered.length} posted ===`);
+  logger.info(`=== Cycle completed ===`);
 }
 
 export async function startMonitor(once: boolean): Promise<void> {
