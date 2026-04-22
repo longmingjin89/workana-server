@@ -50,6 +50,15 @@ function isRecentProject(publishedAt: string): boolean {
   return minutes <= maxMinutes;
 }
 
+function checkSessionExpired(projects: { budget: string }[]): void {
+  if (projects.length === 0) return;
+  const allOpen = projects.every(p => p.budget.trim().toLowerCase() === 'open');
+  if (allOpen) {
+    logger.error('Session expired: all project budgets are "Open". Exiting.');
+    process.exit(1);
+  }
+}
+
 function passesBudgetFilter(budget: string): boolean {
   if (isHourly(budget)) return false;
 
@@ -93,6 +102,7 @@ async function runCycle(page: Page): Promise<void> {
     }
 
     const projects = await collectProjects(page, true);
+    checkSessionExpired(projects);
     // Mark all current projects as seen (in-memory + DB check)
     for (const p of projects) {
       seenSlugs.add(p.slug);
@@ -109,6 +119,7 @@ async function runCycle(page: Page): Promise<void> {
   }
 
   const allProjects = await collectProjects(page);
+  checkSessionExpired(allProjects);
 
   // Deduplicate against in-memory set (fast) + DB (authoritative)
   const newProjects = [];
